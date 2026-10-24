@@ -1,0 +1,5 @@
+
+# 50+50 candidate pool. Exact daily market-cap ranking MUST be verified from a permitted source.
+TW=["2330.TW","2454.TW","2317.TW","2382.TW","2308.TW","2881.TW","2882.TW","2891.TW","2412.TW","3711.TW","2303.TW","1301.TW","1303.TW","2002.TW","2886.TW","2884.TW","2892.TW","2885.TW","2880.TW","1216.TW","2207.TW","3045.TW","4904.TW","3008.TW","2395.TW","2357.TW","2353.TW","2379.TW","3034.TW","6669.TW","3231.TW","4938.TW","2327.TW","2603.TW","2609.TW","2615.TW","2618.TW","2912.TW","5871.TW","5876.TW","2890.TW","2887.TW","2883.TW","3037.TW","2345.TW","3661.TW","5269.TW","8299.TW","2408.TW","6770.TW"]
+US=["NVDA","MSFT","AAPL","AMZN","GOOGL","GOOG","META","AVGO","BRK-B","TSLA","LLY","WMT","JPM","V","XOM","UNH","ORCL","MA","COST","JNJ","HD","PG","ABBV","BAC","NFLX","CVX","KO","CRM","MRK","AMD","PEP","ADBE","TMO","LIN","ACN","CSCO","MCD","WFC","IBM","GE","ABT","CAT","DHR","QCOM","INTU","TXN","AMGN","NOW","PM","AXP","ISRG"]
+def get_universe(): return {"TW":[{"ticker":x,"market":"TW"} for x in TW],"US":[{"ticker":x,"market":"US"} for x in US]}
