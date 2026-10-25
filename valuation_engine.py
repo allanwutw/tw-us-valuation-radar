@@ -51,7 +51,6 @@ def weighted(values, weights):
 
     return sum(v * w for v, w in pairs) / total_weight
 
-
 def estimate_quality(f):
     # Only scores observed inputs; missing values reduce confidence.
     score=50.0
