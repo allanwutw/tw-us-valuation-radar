@@ -29,9 +29,28 @@ def ev_ebitda_value(ebitda, multiple, net_debt, shares):
     return (ebitda*multiple-net_debt)/shares
 
 def weighted(values, weights):
-    pairs=[(v,w) for v,w in zip(values,weights) if v is not None and w>0]
-    if not pairs: return None
-    return sum(v*w for v,w in pairs)/sum(w for _,w in pairs)
+    pairs = [
+        (v, w)
+        for v, w in zip(values, weights)
+        if (
+            v is not None
+            and math.isfinite(v)
+            and v > 0
+            and w is not None
+            and math.isfinite(w)
+            and w > 0
+        )
+    ]
+
+    if not pairs:
+        return None
+
+    total_weight = sum(w for _, w in pairs)
+    if total_weight <= 0:
+        return None
+
+    return sum(v * w for v, w in pairs) / total_weight
+
 
 def estimate_quality(f):
     # Only scores observed inputs; missing values reduce confidence.
