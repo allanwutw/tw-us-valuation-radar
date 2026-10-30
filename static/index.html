@@ -1,30 +1,978 @@
-<!doctype html>
+
+<!DOCTYPE html>
 <html lang="zh-Hant">
 <head>
-<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>台美大型股超級估值雷達</title>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#f5f7fb">
+<title>台美股估值雷達</title>
+
 <style>
-*{box-sizing:border-box}body{margin:0;background:#f4f7fb;color:#17243b;font:15px system-ui,-apple-system,"Noto Sans TC",sans-serif}header{background:#142b49;color:#fff;padding:22px 16px}.w{max-width:1050px;margin:auto;padding:16px}header .w{padding:0}h1{font-size:clamp(24px,5vw,34px);margin:10px 0}.sub{color:#d8e4f4}.tabs,.ctrl{display:flex;gap:8px;margin:12px 0}.tabs button{flex:1}button,input,select{font:inherit;padding:11px;border:1px solid #dce4ef;border-radius:10px;background:#fff;color:#17243b}button{cursor:pointer}.tabs .on{background:#142b49;color:#fff;border-color:#142b49}.ctrl input{flex:1;min-width:0}.grid{display:grid;gap:9px}.card{background:#fff;border:1px solid #e0e7f0;border-radius:13px;padding:13px}.stock-card{cursor:pointer}.stock-card:hover{border-color:#9db5d3}.top{display:flex;justify-content:space-between;gap:12px;align-items:flex-start}.stock-title{display:flex;align-items:flex-start;gap:7px;min-width:0}.stock-title>div{min-width:0}.stock-name{overflow-wrap:anywhere}.price{white-space:nowrap;text-align:right}.muted{color:#718097;font-size:12px}.metrics{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:9px;border-top:1px solid #e8edf4;padding-top:9px}.metrics small{color:#718097;font-size:12px}.metrics b{overflow-wrap:anywhere}.up{color:#087f5b}.down{color:#c2413b}.star{border:0;background:transparent;padding:2px 7px 2px 0;font-size:22px;line-height:1;color:#a0a9b7}.star.active{color:#e5a000}.detail{margin-top:14px;line-height:1.65}.detail h2{margin-top:0}.detail-actions{display:flex;gap:8px;flex-wrap:wrap}.notice{padding:10px 12px;background:#fff8e6;border:1px solid #f2dfaa;border-radius:10px;color:#72520b;margin:10px 0}.empty{padding:20px;text-align:center;color:#718097}@media(min-width:700px){.grid{grid-template-columns:1fr 1fr}}@media(max-width:520px){.ctrl{flex-wrap:wrap}.ctrl input{flex-basis:100%}.ctrl select{flex:1;min-width:0}.metrics{gap:5px}.metrics small{font-size:11px}.metrics b{font-size:14px}.top{gap:8px}.price{font-size:14px}}
-</style></head>
+:root {
+  --bg: #f5f7fb;
+  --card: #ffffff;
+  --text: #182230;
+  --muted: #667085;
+  --line: #e5eaf1;
+  --blue: #2457d6;
+  --blue-light: #edf3ff;
+  --green: #14804a;
+  --red: #c0392b;
+  --orange: #b76b12;
+  --shadow: 0 5px 20px rgba(20, 35, 65, .06);
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI",
+    "Noto Sans TC", "Microsoft JhengHei", sans-serif;
+  font-size: 16px;
+  line-height: 1.65;
+}
+
+button, input, select { font: inherit; }
+
+button { cursor: pointer; }
+
+.container {
+  width: min(1180px, calc(100% - 36px));
+  margin: 0 auto;
+}
+
+header {
+  padding: 30px 0 20px;
+}
+
+.header-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+h1 {
+  font-size: 28px;
+  line-height: 1.3;
+  margin: 0;
+  letter-spacing: -.5px;
+}
+
+.subtitle {
+  color: var(--muted);
+  margin-top: 8px;
+  font-size: 15px;
+}
+
+.update-text {
+  color: var(--muted);
+  font-size: 14px;
+  text-align: right;
+}
+
+.tabs {
+  display: flex;
+  gap: 8px;
+  margin: 18px 0;
+  border-bottom: 1px solid var(--line);
+  overflow-x: auto;
+}
+
+.tab {
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  padding: 12px 17px;
+  font-weight: 700;
+  white-space: nowrap;
+  border-bottom: 3px solid transparent;
+}
+
+.tab.active {
+  color: var(--blue);
+  border-bottom-color: var(--blue);
+}
+
+.toolbar {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin: 18px 0;
+}
+
+.search {
+  flex: 1;
+  min-width: 210px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: white;
+  outline: none;
+}
+
+.search:focus {
+  border-color: var(--blue);
+  box-shadow: 0 0 0 3px rgba(36,87,214,.1);
+}
+
+select, .refresh-btn {
+  padding: 11px 14px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: white;
+  color: var(--text);
+}
+
+.refresh-btn {
+  background: var(--blue);
+  color: white;
+  border-color: var(--blue);
+  font-weight: 700;
+}
+
+.refresh-btn:hover { opacity: .9; }
+
+.summary {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  color: var(--muted);
+  font-size: 14px;
+  margin: 12px 0;
+}
+
+.warning {
+  display: none;
+  background: #fff7e8;
+  border: 1px solid #f2d6a5;
+  color: #8a5714;
+  padding: 12px 15px;
+  border-radius: 10px;
+  margin: 14px 0;
+  font-size: 14px;
+}
+
+.warning.show { display: block; }
+
+.stock-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  margin: 18px 0 35px;
+}
+
+.stock-card {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 17px 18px;
+  box-shadow: var(--shadow);
+  min-width: 0;
+  transition: transform .15s, box-shadow .15s;
+}
+
+.stock-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(20,35,65,.1);
+}
+
+.card-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.stock-title {
+  min-width: 0;
+  cursor: pointer;
+}
+
+.stock-name {
+  font-size: 19px;
+  font-weight: 800;
+  overflow-wrap: anywhere;
+}
+
+.stock-ticker {
+  color: var(--muted);
+  font-size: 13px;
+  margin-top: 2px;
+}
+
+.sector {
+  color: var(--muted);
+  font-size: 13px;
+  margin-top: 5px;
+}
+
+.star {
+  border: 0;
+  background: transparent;
+  color: #c1c8d3;
+  font-size: 25px;
+  line-height: 1;
+  padding: 2px 4px;
+  flex-shrink: 0;
+}
+
+.star.active { color: #e3a008; }
+
+.price-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 10px;
+  margin-top: 17px;
+}
+
+.price-label {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.price {
+  font-size: 22px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.upside {
+  font-size: 18px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.positive { color: var(--green); }
+.negative { color: var(--red); }
+.neutral { color: var(--muted); }
+
+.metrics {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin-top: 15px;
+  padding-top: 13px;
+  border-top: 1px solid var(--line);
+}
+
+.metric-label {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.metric-value {
+  font-size: 15px;
+  font-weight: 700;
+  margin-top: 3px;
+  overflow-wrap: anywhere;
+}
+
+.card-bottom {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.method {
+  color: var(--muted);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.detail-btn {
+  border: 1px solid #d7e2fa;
+  background: var(--blue-light);
+  color: var(--blue);
+  padding: 7px 12px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.status-warning {
+  color: var(--orange);
+  font-size: 12px;
+  margin-top: 10px;
+  background: #fff8eb;
+  padding: 7px 9px;
+  border-radius: 7px;
+}
+
+.empty {
+  grid-column: 1 / -1;
+  text-align: center;
+  color: var(--muted);
+  background: white;
+  border: 1px dashed var(--line);
+  padding: 45px 20px;
+  border-radius: 14px;
+}
+
+.loading {
+  grid-column: 1 / -1;
+  text-align: center;
+  color: var(--muted);
+  padding: 40px;
+}
+
+.modal-backdrop {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  background: rgba(15, 23, 42, .48);
+  padding: 20px;
+  overflow-y: auto;
+}
+
+.modal-backdrop.show {
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+}
+
+.modal {
+  width: min(650px, 100%);
+  background: white;
+  border-radius: 16px;
+  padding: 22px;
+  margin: auto;
+  box-shadow: 0 15px 50px rgba(0,0,0,.2);
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.modal-title {
+  font-size: 23px;
+  font-weight: 800;
+}
+
+.close-btn {
+  border: 0;
+  background: #f1f3f6;
+  border-radius: 8px;
+  padding: 5px 11px;
+  font-size: 20px;
+}
+
+.detail-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0,1fr));
+  gap: 12px;
+  margin-top: 20px;
+}
+
+.detail-item {
+  background: #f7f9fc;
+  border-radius: 10px;
+  padding: 12px;
+  min-width: 0;
+}
+
+.detail-label {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.detail-value {
+  font-size: 17px;
+  font-weight: 700;
+  margin-top: 4px;
+  overflow-wrap: anywhere;
+}
+
+.detail-section {
+  margin-top: 20px;
+}
+
+.detail-section h3 {
+  font-size: 16px;
+  margin: 0 0 8px;
+}
+
+.detail-text {
+  color: #475467;
+  font-size: 14px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+footer {
+  color: var(--muted);
+  font-size: 12px;
+  text-align: center;
+  padding: 20px 0 35px;
+}
+
+@media (max-width: 720px) {
+  .container { width: min(100% - 24px, 600px); }
+  header { padding-top: 22px; }
+  h1 { font-size: 24px; }
+  .stock-list { grid-template-columns: 1fr; gap: 11px; }
+  .stock-card { padding: 15px; }
+  .stock-name { font-size: 18px; }
+  .price { font-size: 21px; }
+  .update-text { text-align: left; }
+  .detail-grid { grid-template-columns: 1fr 1fr; }
+}
+
+@media (max-width: 380px) {
+  .detail-grid { grid-template-columns: 1fr; }
+  .metrics { gap: 5px; }
+  .metric-value { font-size: 14px; }
+}
+</style>
+</head>
+
 <body>
-<header><div class="w"><b>AI INVESTMENT RADAR</b><h1>台美大型股超級估值雷達</h1><div class="sub">Top 50 + Top 50｜中性估值｜追蹤清單</div></div></header>
-<main class="w"><p class="muted">規則：資料不完整就不給合理價；估值假設、來源與時間應可追溯。估值結果僅供研究參考，不構成投資建議。</p>
-<div class="tabs" role="tablist" aria-label="市場選擇"><button id="TW" class="on" type="button">台股 50</button><button id="US" type="button">美股 50</button><button id="WATCH" type="button">⭐ 追蹤中 <span id="watchCount">0</span></button></div>
-<div class="ctrl"><input id="q" type="search" placeholder="輸入股票代號或名稱，例如 MU、2330" aria-label="搜尋股票"><select id="s" aria-label="排序方式"><option value="upside">潛在報酬</option><option value="confidence">估值信心</option><option value="quality">品質</option></select><button id="r" type="button">更新</button></div>
-<div id="msg" class="muted" role="status">載入中…</div><div id="list" class="grid"></div><section id="d" class="card detail" hidden aria-live="polite"></section></main>
+<div class="container">
+
+<header>
+  <div class="header-top">
+    <div>
+      <h1>📊 台美股估值雷達</h1>
+      <div class="subtitle">
+        台股 50＋美股 100｜中性估值｜個股追蹤清單
+      </div>
+    </div>
+    <div class="update-text" id="updatedAt">資料載入中…</div>
+  </div>
+
+  <nav class="tabs">
+    <button class="tab active" data-market="TW" id="tabTW">
+      台股 50
+    </button>
+    <button class="tab" data-market="US" id="tabUS">
+      美股 100
+    </button>
+    <button class="tab" data-market="WATCH" id="tabWATCH">
+      ⭐ 追蹤中 <span id="watchCount">0</span>
+    </button>
+  </nav>
+</header>
+
+<div class="toolbar">
+  <input
+    class="search"
+    id="searchInput"
+    type="search"
+    placeholder="搜尋股票名稱、代號或產業…"
+    autocomplete="off"
+  >
+
+  <select id="sortSelect" aria-label="排序方式">
+    <option value="upside">依預估上漲空間排序</option>
+    <option value="confidence">依估值信心度排序</option>
+    <option value="quality">依品質分數排序</option>
+  </select>
+
+  <button class="refresh-btn" id="refreshBtn">↻ 重新整理</button>
+</div>
+
+<div class="summary">
+  <span id="resultCount">準備載入資料…</span>
+  <span id="marketLabel">目前市場：台股</span>
+</div>
+
+<div class="warning" id="globalWarning"></div>
+
+<main class="stock-list" id="stockList">
+  <div class="loading">正在讀取估值資料…</div>
+</main>
+
+<footer>
+  本網站資料僅供研究參考，不構成投資建議。估值結果不代表未來報酬保證。
+</footer>
+</div>
+
+<div class="modal-backdrop" id="modalBackdrop">
+  <section class="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+    <div class="modal-header">
+      <div>
+        <div class="modal-title" id="modalTitle">個股詳細資訊</div>
+        <div class="stock-ticker" id="modalTicker"></div>
+      </div>
+      <button class="close-btn" id="closeModal" aria-label="關閉">×</button>
+    </div>
+    <div id="modalContent"></div>
+  </section>
+</div>
+
 <script>
-'use strict';
-let M='TW',A=[];const $=id=>document.getElementById(id);const WATCH_KEY='tw-us-valuation-radar-watchlist-v1';
-const money=(v,c)=>v==null||!Number.isFinite(Number(v))?'—':(c==='TWD'?'NT$':'US$')+Number(v).toLocaleString('en-US',{maximumFractionDigits:2});
-function esc(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
-function getWatch(){try{let v=JSON.parse(localStorage.getItem(WATCH_KEY)||'[]');return new Set(Array.isArray(v)?v.map(String):[])}catch(e){return new Set()}}
-function saveWatch(s){try{localStorage.setItem(WATCH_KEY,JSON.stringify([...s]));return true}catch(e){return false}}
-function countWatch(){$('watchCount').textContent=getWatch().size}
-function toggleWatch(t){let s=getWatch();s.has(t)?s.delete(t):s.add(t);let ok=saveWatch(s);countWatch();draw();if(!ok)alert('此瀏覽器無法儲存追蹤清單，重新整理後可能會消失。')}
-async function fetchMarket(m){let r=await fetch('/api/stocks?market='+encodeURIComponent(m));if(!r.ok)throw Error('HTTP '+r.status);return r.json()}
-async function load(){ $('msg').textContent='載入資料中…';try{if(M==='WATCH'){let [tw,us]=await Promise.all([fetchMarket('TW'),fetchMarket('US')]);let map=new Map();[...(tw.stocks||[]),...(us.stocks||[])].forEach(x=>map.set(String(x.ticker),x));let s=getWatch();A=[...s].map(t=>map.get(t)).filter(Boolean);let missing=[...s].filter(t=>!map.has(t));$('msg').textContent='追蹤清單｜共 '+A.length+' 檔'+(missing.length?'；有 '+missing.length+' 檔不在目前清單資料中':'')+'。追蹤設定儲存在此瀏覽器。'}else{let j=await fetchMarket(M);A=j.stocks||[];$('msg').textContent=(j.warning?j.warning+' ':'')+'資料更新：'+(j.updated_at||'未知')}countWatch();draw()}catch(e){$('msg').textContent='資料服務載入失敗：'+e.message+'。請確認網站 API 正常後再按「更新」。';$('list').innerHTML='<div class="card empty">目前無法載入股票資料。</div>'}}
-function draw(){let q=$('q').value.trim().toLowerCase(),sort=$('s').value,s=getWatch();let a=A.filter(x=>(String(x.ticker||'')+' '+String(x.name||'')).toLowerCase().includes(q));a.sort((x,y)=>sort==='confidence'?(Number(y.confidence)||0)-(Number(x.confidence)||0):sort==='quality'?(Number(y.quality_score)||0)-(Number(x.quality_score)||0):Number(y.upside_pct??-999)-Number(x.upside_pct??-999));if(!a.length){$('list').innerHTML='<div class="card empty">'+(M==='WATCH'?'目前沒有符合條件的追蹤股票。可在台股或美股頁面按 ☆ 加入。':'沒有符合搜尋條件的股票。')+'</div>';return}
-$('list').innerHTML=a.map(x=>{let t=String(x.ticker||''),safe=esc(t),watched=s.has(t),up=Number(x.upside_pct),upText=x.upside_pct==null||!Number.isFinite(up)?'待估值':(up>=0?'+':'')+up.toFixed(1)+'%',warning=(x.upside_pct!=null&&up>100)||(x.price>0&&x.fair_value>3*x.price)||(x.price>0&&x.bvps>20*x.price);return `<article class="card stock-card" tabindex="0" role="button" aria-label="查看 ${esc(x.name)} 詳情" onclick="show('${safe}')"><div class="top"><div class="stock-title"><button type="button" class="star ${watched?'active':''}" aria-label="${watched?'取消追蹤':'加入追蹤'} ${safe}" title="${watched?'取消追蹤':'加入追蹤'}" onclick="event.stopPropagation();toggleWatch('${safe}')">${watched?'★':'☆'}</button><div><b class="stock-name">${esc(x.name||t)}</b> <span class="muted">${safe}</span><div class="muted">${esc(x.sector||'待分類')}｜市值排名${x.universe_verified?'已驗證':'待驗證'}</div></div></div><b class="price">${money(x.price,x.currency)}</b></div>${warning?'<div class="notice">估值數字偏高，建議核對 EPS、股數、帳面價值與幣別後再參考。</div>':''}<div class="metrics"><div><small>中性合理價</small><br><b>${money(x.fair_value,x.currency)}</b></div><div><small>潛在報酬</small><br><b class="${Number.isFinite(up)&&up>=0?'up':'down'}">${upText}</b></div><div><small>信心</small><br><b>${x.confidence==null?'—':esc(x.confidence)}/100</b></div></div></article>`}).join('')}
-async function show(t){let ticker=String(t);$('d').hidden=false;$('d').innerHTML='<p>載入個股資料中…</p>';$('d').scrollIntoView({behavior:'smooth',block:'start'});try{let r=await fetch('/api/stock/'+encodeURIComponent(ticker));if(!r.ok)throw Error('HTTP '+r.status);let x=await r.json(),watched=getWatch().has(ticker);$('d').innerHTML=`<h2>${esc(x.name||ticker)}（${esc(x.ticker||ticker)}）</h2><p>現價 <b>${money(x.price,x.currency)}</b>　中性合理價 <b>${money(x.fair_value,x.currency)}</b></p><p>悲觀 ${money(x.bear_value,x.currency)}｜中性 ${money(x.fair_value,x.currency)}｜樂觀 ${money(x.bull_value,x.currency)}</p><p>品質 ${x.quality_score??'—'}｜信心 ${x.confidence??'—'}/100｜模型：${esc(x.valuation_method||'多模型加權')}</p><p class="muted">資料來源：${esc(x.source||'未提供')}<br>資料日期：${esc(x.price_as_of||'未提供')}<br>${esc(x.notes||'')}</p><div class="detail-actions"><button type="button" id="detailWatch">${watched?'★ 已追蹤（點此取消）':'☆ 加入追蹤'}</button><button type="button" id="closeDetail">收起詳情</button></div>`;$('detailWatch').onclick=()=>{toggleWatch(ticker);$('detailWatch').textContent=getWatch().has(ticker)?'★ 已追蹤（點此取消）':'☆ 加入追蹤'};$('closeDetail').onclick=()=>$('d').hidden=true}catch(e){$('d').innerHTML='<p>無法取得個股詳情：'+esc(e.message)+'</p><button type="button" id="closeDetail">收起詳情</button>';$('closeDetail').onclick=()=>$('d').hidden=true}}
-document.querySelectorAll('.tabs button').forEach(b=>b.addEventListener('click',()=>{M=b.id;document.querySelectorAll('.tabs button').forEach(x=>x.classList.toggle('on',x.id===M));$('d').hidden=true;load()}));$('q').addEventListener('input',draw);$('s').addEventListener('change',draw);$('r').addEventListener('click',load);countWatch();load();
-</script></body></html>
+"use strict";
+
+const API = {
+  stocks: "/api/stocks?market=",
+  stock: "/api/stock/"
+};
+
+const WATCH_KEY = "tw-us-valuation-radar-watchlist-v1";
+
+let currentMarket = "TW";
+let marketStocks = { TW: [], US: [] };
+let watchlist = loadWatchlist();
+let currentStocks = [];
+
+const $ = id => document.getElementById(id);
+
+function loadWatchlist() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(WATCH_KEY) || "[]");
+    return new Set(Array.isArray(saved) ? saved.map(String) : []);
+  } catch {
+    return new Set();
+  }
+}
+
+function saveWatchlist() {
+  localStorage.setItem(WATCH_KEY, JSON.stringify([...watchlist]));
+  updateWatchCount();
+}
+
+function updateWatchCount() {
+  $("watchCount").textContent = watchlist.size;
+}
+
+function escapeHTML(value) {
+  return String(value ?? "").replace(/[&<>"']/g, char => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    '"': "&quot;",
+    "'": "&#39;"
+  })[char]);
+}
+
+function numberValue(value) {
+  if (value === null || value === undefined || value === "") return null;
+  const n = Number(value);
+  return Number.isFinite(n) ? n : null;
+}
+
+function formatNumber(value, digits = 2) {
+  const n = numberValue(value);
+  if (n === null) return "—";
+  return n.toLocaleString("zh-TW", {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: digits
+  });
+}
+
+function formatPercent(value) {
+  const n = numberValue(value);
+  if (n === null) return "—";
+  return `${n > 0 ? "+" : ""}${formatNumber(n)}%`;
+}
+
+function formatPrice(value, currency) {
+  const n = numberValue(value);
+  if (n === null) return "—";
+  const symbol = currency === "USD" ? "US$" :
+    currency === "TWD" ? "NT$" : "";
+  return symbol + formatNumber(n, 2);
+}
+
+function getTicker(stock) {
+  return String(stock.ticker || "");
+}
+
+function getStockKey(stock) {
+  return getTicker(stock).toUpperCase();
+}
+
+function isWatched(stock) {
+  return watchlist.has(getStockKey(stock));
+}
+
+function toggleWatch(stock) {
+  const key = getStockKey(stock);
+  if (watchlist.has(key)) {
+    watchlist.delete(key);
+  } else {
+    watchlist.add(key);
+  }
+  saveWatchlist();
+  renderStocks();
+}
+
+function getUpsideClass(value) {
+  const n = numberValue(value);
+  if (n === null) return "neutral";
+  if (n > 0) return "positive";
+  if (n < 0) return "negative";
+  return "neutral";
+}
+
+function hasAnomaly(stock) {
+  const notes = String(stock.notes || "");
+  const status = String(stock.status || "");
+  const text = `${notes} ${status}`.toLowerCase();
+
+  const anomalyWords = [
+    "anomaly", "異常", "警示", "偏差",
+    "資料不足", "極端", "不可靠", "suppress"
+  ];
+
+  return anomalyWords.some(word => text.includes(word)) ||
+    stock.fair_value === null ||
+    stock.fair_value === undefined ||
+    stock.universe_verified === false;
+}
+
+function getAnomalyText(stock) {
+  if (stock.universe_verified === false) {
+    return "股票資料尚未通過名單驗證，請留意。";
+  }
+
+  if (stock.fair_value === null || stock.fair_value === undefined) {
+    return "目前估值資料不足或估值結果受到抑制，請審慎參考。";
+  }
+
+  return String(stock.notes || stock.status || "此股票有估值異常提醒，請審慎參考。");
+}
+
+function sortStocks(stocks) {
+  const mode = $("sortSelect").value;
+  const result = [...stocks];
+
+  result.sort((a, b) => {
+    const getValue = stock => {
+      if (mode === "confidence") {
+        return numberValue(stock.confidence) ?? -Infinity;
+      }
+      if (mode === "quality") {
+        return numberValue(stock.quality_score) ?? -Infinity;
+      }
+      return numberValue(stock.upside_pct) ?? -Infinity;
+    };
+
+    return getValue(b) - getValue(a);
+  });
+
+  return result;
+}
+
+function filterStocks(stocks) {
+  const keyword = $("searchInput").value.trim().toLowerCase();
+
+  if (!keyword) return stocks;
+
+  return stocks.filter(stock => {
+    const text = [
+      stock.ticker,
+      stock.name,
+      stock.sector,
+      stock.display_name
+    ].join(" ").toLowerCase();
+
+    return text.includes(keyword);
+  });
+}
+
+function renderStocks() {
+  let stocks;
+
+  if (currentMarket === "WATCH") {
+    stocks = [...marketStocks.TW, ...marketStocks.US]
+      .filter(stock => isWatched(stock));
+  } else {
+    stocks = marketStocks[currentMarket] || [];
+  }
+
+  stocks = filterStocks(stocks);
+  stocks = sortStocks(stocks);
+  currentStocks = stocks;
+
+  $("resultCount").textContent = `顯示 ${stocks.length} 檔股票`;
+
+  if (currentMarket === "TW") {
+    $("marketLabel").textContent = "目前市場：台股";
+  } else if (currentMarket === "US") {
+    $("marketLabel").textContent = "目前市場：美股";
+  } else {
+    $("marketLabel").textContent = "目前清單：追蹤中";
+  }
+
+  const list = $("stockList");
+
+  if (!stocks.length) {
+    list.innerHTML = `
+      <div class="empty">
+        ${currentMarket === "WATCH"
+          ? "目前沒有追蹤中的股票。<br>點選個股右上角的 ☆ 即可加入追蹤。"
+          : "找不到符合條件的股票。"}
+      </div>`;
+    return;
+  }
+
+  list.innerHTML = stocks.map(stock => {
+    const ticker = escapeHTML(getTicker(stock));
+    const name = escapeHTML(stock.name || stock.display_name || ticker);
+    const sector = escapeHTML(stock.sector || "未分類");
+    const currency = stock.currency || "";
+    const price = formatPrice(stock.price, currency);
+    const fairValue = formatPrice(stock.fair_value, currency);
+    const upside = formatPercent(stock.upside_pct);
+    const upsideClass = getUpsideClass(stock.upside_pct);
+    const confidence = formatNumber(stock.confidence);
+    const quality = formatNumber(stock.quality_score);
+    const watched = isWatched(stock);
+    const anomaly = hasAnomaly(stock);
+
+    return `
+      <article class="stock-card">
+        <div class="card-top">
+          <div class="stock-title" onclick="openDetail('${encodeURIComponent(ticker)}')">
+            <div class="stock-name">${name}</div>
+            <div class="stock-ticker">${ticker}</div>
+            <div class="sector">${sector}</div>
+          </div>
+
+          <button
+            class="star ${watched ? "active" : ""}"
+            onclick="toggleWatchByTicker('${encodeURIComponent(ticker)}')"
+            title="${watched ? "取消追蹤" : "加入追蹤"}"
+            aria-label="${watched ? "取消追蹤" : "加入追蹤"}"
+          >${watched ? "★" : "☆"}</button>
+        </div>
+
+        <div class="price-row">
+          <div>
+            <div class="price-label">目前價格</div>
+            <div class="price">${price}</div>
+          </div>
+          <div style="text-align:right">
+            <div class="price-label">預估上漲空間</div>
+            <div class="upside ${upsideClass}">${upside}</div>
+          </div>
+        </div>
+
+        <div class="metrics">
+          <div>
+            <div class="metric-label">合理價值</div>
+            <div class="metric-value">${fairValue}</div>
+          </div>
+          <div>
+            <div class="metric-label">信心度</div>
+            <div class="metric-value">${confidence}</div>
+          </div>
+          <div>
+            <div class="metric-label">品質分數</div>
+            <div class="metric-value">${quality}</div>
+          </div>
+        </div>
+
+        ${anomaly ? `
+          <div class="status-warning">
+            ⚠️ ${escapeHTML(getAnomalyText(stock))}
+          </div>` : ""}
+
+        <div class="card-bottom">
+          <span class="method">${escapeHTML(stock.valuation_method || "估值模型")}</span>
+          <button class="detail-btn"
+            onclick="openDetail('${encodeURIComponent(ticker)}')">
+            查看詳情 →
+          </button>
+        </div>
+      </article>`;
+  }).join("");
+}
+
+function toggleWatchByTicker(encodedTicker) {
+  const ticker = decodeURIComponent(encodedTicker);
+  const stock = [...marketStocks.TW, ...marketStocks.US]
+    .find(item => getTicker(item).toUpperCase() === ticker.toUpperCase());
+
+  if (stock) toggleWatch(stock);
+}
+
+async function loadMarket(market) {
+  const response = await fetch(API.stocks + encodeURIComponent(market), {
+    cache: "no-store"
+  });
+
+  if (!response.ok) {
+    throw new Error(`讀取${market}資料失敗（HTTP ${response.status}）`);
+  }
+
+  const data = await response.json();
+
+  if (!Array.isArray(data.stocks)) {
+    throw new Error("API 回傳的股票資料格式不正確");
+  }
+
+  marketStocks[market] = data.stocks;
+
+  if (data.updated_at) {
+    $("updatedAt").textContent = `資料更新時間：${data.updated_at}`;
+  }
+
+  if (data.warning) {
+    $("globalWarning").textContent = `資料提醒：${data.warning}`;
+    $("globalWarning").classList.add("show");
+  }
+
+  return data;
+}
+
+async function refreshData() {
+  const button = $("refreshBtn");
+  button.disabled = true;
+  button.textContent = "載入中…";
+
+  $("stockList").innerHTML =
+    '<div class="loading">正在讀取最新估值資料…</div>';
+
+  try {
+    await Promise.all([
+      loadMarket("TW"),
+      loadMarket("US")
+    ]);
+
+    $("globalWarning").classList.remove("show");
+    renderStocks();
+  } catch (error) {
+    console.error(error);
+    $("stockList").innerHTML = `
+      <div class="empty">
+        <strong>資料載入失敗</strong><br>
+        ${escapeHTML(error.message)}<br>
+        請稍後重新整理，或確認後端 API 是否正常。
+      </div>`;
+  } finally {
+    button.disabled = false;
+    button.textContent = "↻ 重新整理";
+  }
+}
+
+function switchMarket(market) {
+  currentMarket = market;
+
+  document.querySelectorAll(".tab").forEach(tab => {
+    tab.classList.toggle("active", tab.dataset.market === market);
+  });
+
+  $("searchInput").value = "";
+  renderStocks();
+}
+
+function detailItem(label, value) {
+  return `
+    <div class="detail-item">
+      <div class="detail-label">${escapeHTML(label)}</div>
+      <div class="detail-value">${escapeHTML(value ?? "—")}</div>
+    </div>`;
+}
+
+async function openDetail(encodedTicker) {
+  const ticker = decodeURIComponent(encodedTicker);
+
+  $("modalTitle").textContent = "個股詳細資訊";
+  $("modalTicker").textContent = ticker;
+  $("modalContent").innerHTML =
+    '<div class="loading">正在讀取個股資料…</div>';
+  $("modalBackdrop").classList.add("show");
+
+  try {
+    const response = await fetch(API.stock + encodeURIComponent(ticker), {
+      cache: "no-store"
+    });
+
+    if (!response.ok) {
+      throw new Error(`讀取個股資料失敗（HTTP ${response.status}）`);
+    }
+
+    const stock = await response.json();
+
+    const name = stock.name || stock.display_name || stock.ticker;
+    const currency = stock.currency || "";
+    const anomaly = hasAnomaly(stock);
+
+    $("modalTitle").textContent = name;
+    $("modalTicker").textContent =
+      `${stock.ticker || ticker}｜${stock.sector || "未分類"}`;
+
+    $("modalContent").innerHTML = `
+      <div class="detail-grid">
+        ${detailItem("目前價格", formatPrice(stock.price, currency))}
+        ${detailItem("合理價值", formatPrice(stock.fair_value, currency))}
+        ${detailItem("預估上漲空間", formatPercent(stock.upside_pct))}
+        ${detailItem("悲觀估值", formatPrice(stock.bear_value, currency))}
+        ${detailItem("樂觀估值", formatPrice(stock.bull_value, currency))}
+        ${detailItem("估值信心度", formatNumber(stock.confidence))}
+        ${detailItem("品質分數", formatNumber(stock.quality_score))}
+        ${detailItem("估值方法", stock.valuation_method || "—")}
+      </div>
+
+      ${anomaly ? `
+        <div class="status-warning" style="margin-top:16px">
+          ⚠️ ${escapeHTML(getAnomalyText(stock))}
+        </div>` : ""}
+
+      <div class="detail-section">
+        <h3>資料來源</h3>
+        <div class="detail-text">${escapeHTML(stock.source || "—")}</div>
+      </div>
+
+      <div class="detail-section">
+        <h3>估值備註</h3>
+        <div class="detail-text">${escapeHTML(stock.notes || "目前沒有額外備註。")}</div>
+      </div>
+
+      <div class="detail-section">
+        <h3>股票名單驗證</h3>
+        <div class="detail-text">${
+          stock.universe_verified === false
+            ? "尚未通過驗證"
+            : stock.universe_verified === true
+              ? "已通過驗證"
+              : "未提供驗證資訊"
+        }</div>
+      </div>
+    `;
+  } catch (error) {
+    $("modalContent").innerHTML = `
+      <div class="empty">${escapeHTML(error.message)}</div>`;
+  }
+}
+
+function closeDetail() {
+  $("modalBackdrop").classList.remove("show");
+}
+
+document.querySelectorAll(".tab").forEach(tab => {
+  tab.addEventListener("click", () => switchMarket(tab.dataset.market));
+});
+
+$("searchInput").addEventListener("input", renderStocks);
+$("sortSelect").addEventListener("change", renderStocks);
+$("refreshBtn").addEventListener("click", refreshData);
+$("closeModal").addEventListener("click", closeDetail);
+
+$("modalBackdrop").addEventListener("click", event => {
+  if (event.target === $("modalBackdrop")) closeDetail();
+});
+
+document.addEventListener("keydown", event => {
+  if (event.key === "Escape") closeDetail();
+});
+
+updateWatchCount();
+refreshData();
+</script>
+</body>
+</html>
