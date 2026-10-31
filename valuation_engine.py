@@ -60,13 +60,23 @@ def weighted(values, weights):
     pairs = [
         (v, w)
         for v, w in zip(values, weights)
-        if safe_positive(v) and finite_number(w) and w > 0
+        if (
+            v is not None
+            and math.isfinite(v)
+            and v > 0
+            and w is not None
+            and math.isfinite(w)
+            and w > 0
+        )
     ]
+
     if not pairs:
         return None
+
     total_weight = sum(w for _, w in pairs)
     if total_weight <= 0:
         return None
+
     return sum(v * w for v, w in pairs) / total_weight
 
 
