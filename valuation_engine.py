@@ -1,3 +1,9 @@
+"""Transparent multi-method valuation engine.
+
+The valuation formulas and industry assumptions are intentionally kept from the
+original project. This revision only corrects outlier classification when fewer
+than two methods are available and improves input validation.
+"""
 import math
 
 
@@ -24,9 +30,9 @@ def dcf_per_share(fcf0, growth, wacc, terminal_growth, years, net_debt, shares):
         return None
     pv = 0.0
     fcf = fcf0
-    for y in range(1, int(years) + 1):
-        fcf *= (1 + growth)
-        pv += fcf / ((1 + wacc) ** y)
+    for year in range(1, int(years) + 1):
+        fcf *= 1 + growth
+        pv += fcf / ((1 + wacc) ** year)
     terminal = fcf * (1 + terminal_growth) / (wacc - terminal_growth)
     pv += terminal / ((1 + wacc) ** int(years))
     value = (pv - net_debt) / shares
@@ -57,44 +63,28 @@ def ev_ebitda_value(ebitda, multiple, net_debt, shares):
 
 
 def weighted(values, weights):
-    pairs = [
-        (v, w)
-        for v, w in zip(values, weights)
-        if (
-            v is not None
-            and math.isfinite(v)
-            and v > 0
-            and w is not None
-            and math.isfinite(w)
-            and w > 0
-        )
-    ]
-
+    pairs = [(v, w) for v, w in zip(values, weights)
+             if safe_positive(v) and finite_number(w) and w > 0]
     if not pairs:
         return None
-
     total_weight = sum(w for _, w in pairs)
     if total_weight <= 0:
         return None
-
     return sum(v * w for v, w in pairs) / total_weight
 
 
 def robust_weighted(values, weights, max_ratio=3.0):
-    pairs = [
-        (float(v), float(w))
-        for v, w in zip(values, weights)
-        if safe_positive(v) and finite_number(w) and w > 0
-    ]
+    pairs = [(float(v), float(w)) for v, w in zip(values, weights)
+             if safe_positive(v) and finite_number(w) and w > 0]
+    # Zero or one method cannot establish disagreement between models.
     if not pairs:
-        return None, [], True
+        return None, [], False
     if len(pairs) == 1:
-        return pairs[0][0], pairs, True
+        return pairs[0][0], pairs, False
 
     ordered = sorted(v for v, _ in pairs)
     n = len(ordered)
     median = ordered[n // 2] if n % 2 else (ordered[n // 2 - 1] + ordered[n // 2]) / 2
-
     adjusted = []
     had_outlier = False
     for value, weight in pairs:
@@ -104,7 +94,6 @@ def robust_weighted(values, weights, max_ratio=3.0):
             had_outlier = True
         else:
             adjusted.append((value, weight))
-
     total_weight = sum(w for _, w in adjusted)
     if total_weight <= 0:
         return None, pairs, had_outlier
@@ -128,26 +117,16 @@ def estimate_quality(f):
 
 def data_quality_check(f):
     issues = []
-    fields = {
-        "forward_eps": f.get("forward_eps"),
-        "bvps": f.get("bvps"),
-        "forward_ebitda": f.get("forward_ebitda"),
-        "forward_fcf": f.get("forward_fcf"),
-        "net_debt": f.get("net_debt"),
-        "diluted_shares": f.get("diluted_shares"),
-        "price": f.get("price"),
-        "market_cap": f.get("market_cap"),
-    }
+    fields = {key: f.get(key) for key in (
+        "forward_eps", "bvps", "forward_ebitda", "forward_fcf",
+        "net_debt", "diluted_shares", "price", "market_cap")}
     for key, value in fields.items():
         if value is not None and not finite_number(value):
             issues.append(f"{key} 非有效數字")
 
-    price = fields["price"]
-    shares = fields["diluted_shares"]
-    market_cap = fields["market_cap"]
+    price, shares, market_cap = fields["price"], fields["diluted_shares"], fields["market_cap"]
     if safe_positive(price) and safe_positive(shares) and safe_positive(market_cap):
-        implied = price * shares
-        ratio = market_cap / implied
+        ratio = market_cap / (price * shares)
         if ratio < 0.50 or ratio > 2.00:
             issues.append("股價×股數與市值差異異常，可能存在股數/單位問題")
 
@@ -166,7 +145,6 @@ def data_quality_check(f):
     ebitda = fields["forward_ebitda"]
     if safe_positive(ebitda) and safe_positive(market_cap) and market_cap / ebitda > 150:
         issues.append("市值/EBITDA 極端偏高")
-
     if safe_positive(ebitda) and finite_number(fields["net_debt"]):
         if fields["net_debt"] / ebitda > 15:
             issues.append("淨負債/EBITDA 過高")
@@ -183,11 +161,10 @@ def run_valuation(f, assumptions):
         pb_value(bvps, assumptions.get("pb_base")),
         ev_ebitda_value(ebitda, assumptions.get("ev_ebitda_base"), net_debt, shares),
         dcf_per_share(fcf, assumptions.get("growth_base"), assumptions.get("wacc"),
-                      assumptions.get("terminal_growth"), assumptions.get("years", 10), net_debt, shares)
+                      assumptions.get("terminal_growth"), assumptions.get("years", 10), net_debt, shares),
     ]
     weights = [assumptions.get("w_pe", 0), assumptions.get("w_pb", 0),
                assumptions.get("w_ev", 0), assumptions.get("w_dcf", 0)]
-
     raw_base = weighted(base_values, weights)
     base, used_pairs, had_outlier = robust_weighted(base_values, weights)
 
@@ -196,14 +173,14 @@ def run_valuation(f, assumptions):
         pb_value(bvps, assumptions.get("pb_bear")),
         ev_ebitda_value(ebitda, assumptions.get("ev_ebitda_bear"), net_debt, shares),
         dcf_per_share(fcf, assumptions.get("growth_bear"), assumptions.get("wacc_bear", assumptions.get("wacc")),
-                      assumptions.get("terminal_growth"), assumptions.get("years", 10), net_debt, shares)
+                      assumptions.get("terminal_growth"), assumptions.get("years", 10), net_debt, shares),
     ]
     bull_values = [
         pe_value(eps, assumptions.get("pe_bull")),
         pb_value(bvps, assumptions.get("pb_bull")),
         ev_ebitda_value(ebitda, assumptions.get("ev_ebitda_bull"), net_debt, shares),
         dcf_per_share(fcf, assumptions.get("growth_bull"), assumptions.get("wacc_bull", assumptions.get("wacc")),
-                      assumptions.get("terminal_growth"), assumptions.get("years", 10), net_debt, shares)
+                      assumptions.get("terminal_growth"), assumptions.get("years", 10), net_debt, shares),
     ]
     bear, _, bear_outlier = robust_weighted(bear_values, weights)
     bull, _, bull_outlier = robust_weighted(bull_values, weights)
@@ -225,31 +202,23 @@ def run_valuation(f, assumptions):
         confidence -= 8
     confidence = round(clamp(confidence, 0, 100), 1)
 
-    severe = any(
-        k in issue for issue in issues
-        for k in ("股價×股數與市值差異異常", "BVPS 單位", "市值/EBITDA 極端")
-    )
+    severe = any(k in issue for issue in issues for k in (
+        "股價×股數與市值差異異常", "BVPS 單位", "市值/EBITDA 極端"))
     if severe:
-        fair_value = None
-        status = "資料異常，暫不提供合理價"
+        fair_value, status = None, "資料異常，暫不提供合理價"
     elif base is None:
-        fair_value = None
-        status = "資料不足，暫不提供合理價"
+        fair_value, status = None, "資料不足，暫不提供合理價"
     elif len(used_pairs) < 2:
-        fair_value = None
-        status = "僅單一估值方法，暫不提供合理價"
+        fair_value, status = None, "僅單一估值方法，暫不提供合理價"
     else:
         fair_value = base
         status = "模型計算（已進行離群值檢查）" if had_outlier else "模型計算（需人工/資料源驗證假設）"
 
     return {
         "bear_value": bear, "fair_value": fair_value, "bull_value": bull,
-        "raw_fair_value": raw_base,
-        "quality_score": quality, "confidence": confidence,
-        "methods_used": len(used_pairs),
-        "valuation_status": status,
-        "valuation_anomalies": issues,
-        "outlier_adjusted": had_outlier,
+        "raw_fair_value": raw_base, "quality_score": quality, "confidence": confidence,
+        "methods_used": len(used_pairs), "valuation_status": status,
+        "valuation_anomalies": issues, "outlier_adjusted": had_outlier,
     }
 
 

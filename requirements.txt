@@ -1,3 +1,1 @@
-Flask>=3.0,<4
-yfinance>=0.2.50
-gunicorn>=22,<24
+yfinance>=0.2.65,<1.0
