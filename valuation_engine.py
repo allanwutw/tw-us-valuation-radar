@@ -1,8 +1,7 @@
 """Transparent multi-method valuation engine.
 
-The valuation formulas and industry assumptions are intentionally kept from the
-original project. This revision only corrects outlier classification when fewer
-than two methods are available and improves input validation.
+Includes domain-specific adjustments for financial stocks, extreme fair value guardrails,
+and handling for unit mismatches in share classes (e.g., BRK-B vs BRK-A).
 """
 import math
 
@@ -76,7 +75,6 @@ def weighted(values, weights):
 def robust_weighted(values, weights, max_ratio=3.0):
     pairs = [(float(v), float(w)) for v, w in zip(values, weights)
              if safe_positive(v) and finite_number(w) and w > 0]
-    # Zero or one method cannot establish disagreement between models.
     if not pairs:
         return None, [], False
     if len(pairs) == 1:
@@ -115,6 +113,27 @@ def estimate_quality(f):
     return round(clamp(score, 0, 100), 1)
 
 
+def sanitize_financial_inputs(f):
+    """Clean up known API anomalies (e.g., BRK-B reporting BRK-A BVPS)."""
+    f = dict(f)
+    ticker = str(f.get("ticker", "")).upper()
+    price = f.get("price")
+    bvps = f.get("bvps")
+    sector = str(f.get("sector", "")).lower()
+
+    # Special handling for Berkshire Hathaway Class B (BRK-B)
+    # yfinance often reports BRK-A BVPS (~500,000 USD) for BRK-B (1/1500th of Class A)
+    if ticker == "BRK-B" and safe_positive(price) and safe_positive(bvps) and bvps > price * 100:
+        f["bvps"] = bvps / 1500.0
+
+    # General Financial Services sanitization: Disable EBITDA & DCF completely
+    if "financial" in sector or "bank" in sector or "insurance" in sector:
+        f["forward_ebitda"] = None
+        f["forward_fcf"] = None
+
+    return f
+
+
 def data_quality_check(f):
     issues = []
     fields = {key: f.get(key) for key in (
@@ -135,8 +154,8 @@ def data_quality_check(f):
         pe = price / eps
         if pe > 250:
             issues.append("Forward PE 極端偏高")
-        elif pe < 1:
-            issues.append("Forward PE 極端偏低，需驗證 EPS")
+        elif pe < 3.0:
+            issues.append("Forward PE 極端偏低，可能是景氣循環股高峰期或一次性獲利")
 
     bvps = fields["bvps"]
     if safe_positive(bvps) and safe_positive(price) and price / bvps > 100:
@@ -152,9 +171,11 @@ def data_quality_check(f):
 
 
 def run_valuation(f, assumptions):
+    f = sanitize_financial_inputs(f)
     eps, bvps = f.get("forward_eps"), f.get("bvps")
     ebitda, fcf = f.get("forward_ebitda"), f.get("forward_fcf")
     net_debt, shares = f.get("net_debt"), f.get("diluted_shares")
+    price = f.get("price")
 
     base_values = [
         pe_value(eps, assumptions.get("pe_base")),
@@ -191,6 +212,14 @@ def run_valuation(f, assumptions):
     if bear_outlier or bull_outlier:
         issues.append("Bear/Bull 情境存在模型離群值，已進行降權")
 
+    # Hard guardrail on extreme fair values relative to price
+    fair_value_extreme = False
+    if safe_positive(base) and safe_positive(price):
+        ratio = base / price
+        if ratio > 3.5 or ratio < 0.25:
+            fair_value_extreme = True
+            issues.append(f"推估合理價與現價偏離過大 ({ratio:.2f}x)，觸發估值保護機制")
+
     quality = estimate_quality(f)
     completeness = sum(v is not None for v in [eps, bvps, ebitda, fcf, net_debt, shares]) / 6
     confidence = 45 + completeness * 35 + quality * 0.20
@@ -200,12 +229,14 @@ def run_valuation(f, assumptions):
         confidence -= 15
     if len(issues) >= 2:
         confidence -= 8
+    if fair_value_extreme:
+        confidence -= 20
     confidence = round(clamp(confidence, 0, 100), 1)
 
     severe = any(k in issue for issue in issues for k in (
         "股價×股數與市值差異異常", "BVPS 單位", "市值/EBITDA 極端"))
-    if severe:
-        fair_value, status = None, "資料異常，暫不提供合理價"
+    if severe or fair_value_extreme:
+        fair_value, status = None, "資料或估值結果偏離過大，暫不提供合理價"
     elif base is None:
         fair_value, status = None, "資料不足，暫不提供合理價"
     elif len(used_pairs) < 2:
@@ -215,17 +246,23 @@ def run_valuation(f, assumptions):
         status = "模型計算（已進行離群值檢查）" if had_outlier else "模型計算（需人工/資料源驗證假設）"
 
     return {
-        "bear_value": bear, "fair_value": fair_value, "bull_value": bull,
-        "raw_fair_value": raw_base, "quality_score": quality, "confidence": confidence,
-        "methods_used": len(used_pairs), "valuation_status": status,
-        "valuation_anomalies": issues, "outlier_adjusted": had_outlier,
+        "bear_value": bear if not fair_value_extreme else None,
+        "fair_value": fair_value,
+        "bull_value": bull if not fair_value_extreme else None,
+        "raw_fair_value": raw_base,
+        "quality_score": quality,
+        "confidence": confidence,
+        "methods_used": len(used_pairs),
+        "valuation_status": status,
+        "valuation_anomalies": issues,
+        "outlier_adjusted": had_outlier,
     }
 
 
 def assumptions_for(industry):
     i = (industry or "").lower()
-    if "financial" in i or "bank" in i:
-        return dict(pe_base=12, pe_bear=9, pe_bull=15, pb_base=1.3, pb_bear=0.9, pb_bull=1.7,
+    if "financial" in i or "bank" in i or "insurance" in i:
+        return dict(pe_base=12, pe_bear=9, pe_bull=15, pb_base=1.2, pb_bear=0.8, pb_bull=1.6,
                     w_pe=.35, w_pb=.65, w_ev=0, w_dcf=0, growth_base=.05, growth_bear=.00,
                     growth_bull=.08, wacc=.10, terminal_growth=.025, years=10)
     if "semiconductor" in i or "technology" in i or "software" in i:
