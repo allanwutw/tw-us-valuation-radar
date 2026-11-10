@@ -60,9 +60,13 @@ def fetch_one(row, market):
         "price_as_of": None,
         "market_cap": None,
         "sector": None,
+        "industry": None,
         "forward_eps": None,
         "forward_ebitda": None,
         "forward_fcf": None,
+        "revenue": None,
+        "ebit": None,
+        "dividend_rate": None,
         "bvps": None,
         "net_debt": None,
         "diluted_shares": None,
@@ -106,6 +110,7 @@ def fetch_one(row, market):
         yahoo_name = info.get("longName") or info.get("shortName")
         stock["name"] = (yahoo_name or curated_name or ticker) if market == "US" else curated_name
         stock["sector"] = info.get("sector") or info.get("industry")
+        stock["industry"] = info.get("industry")
         stock["market_cap"] = number_or_none(info.get("marketCap"))
         stock["currency"] = info.get("currency") or stock["currency"]
         stock["forward_eps"] = number_or_none(info.get("forwardEps"))
@@ -117,6 +122,19 @@ def fetch_one(row, market):
         # legacy field names for compatibility, but disclose the data definition.
         stock["forward_ebitda"] = number_or_none(info.get("ebitda"))
         stock["forward_fcf"] = number_or_none(info.get("freeCashflow"))
+        stock["revenue"] = number_or_none(info.get("totalRevenue"))
+        # Yahoo Finance's EBIT may be absent; operatingIncome is used as a
+        # clearly disclosed proxy when available.
+        ebit_raw = info.get("ebit")
+        if ebit_raw is None:
+            ebit_raw = info.get("operatingIncome")
+            if ebit_raw is not None:
+                stock["notes"] = (stock["notes"] + "；" if stock["notes"] else "") + "EBIT 採 operatingIncome 作為近似值。"
+        stock["ebit"] = number_or_none(ebit_raw)
+        dividend_raw = info.get("dividendRate")
+        if dividend_raw is None:
+            dividend_raw = info.get("trailingAnnualDividendRate")
+        stock["dividend_rate"] = number_or_none(dividend_raw)
         shares = info.get("impliedSharesOutstanding") or info.get("sharesOutstanding")
         stock["diluted_shares"] = number_or_none(shares)
 
@@ -130,7 +148,7 @@ def fetch_one(row, market):
         elif debt is not None and cash_raw is None:
             stock["notes"] = (stock["notes"] + "；" if stock["notes"] else "") + "現金資料缺失，未計算淨負債"
 
-        revenue = number_or_none(info.get("totalRevenue"))
+        revenue = stock["revenue"]
         if stock["forward_fcf"] is not None and revenue is not None and revenue > 0:
             stock["fcf_margin"] = stock["forward_fcf"] / revenue
         ebitda = stock["forward_ebitda"]
@@ -144,7 +162,7 @@ def fetch_one(row, market):
             "未能確認回傳代號／股票類型；不代表股票代號必然錯誤"
         )
 
-        valuation = run_valuation(stock, assumptions_for(stock["sector"]))
+        valuation = run_valuation(stock, assumptions_for(stock.get("industry") or stock["sector"]))
         # Always preserve the engine's status and diagnostics, including when
         # fair_value is intentionally suppressed.
         stock.update(valuation)
@@ -154,7 +172,7 @@ def fetch_one(row, market):
             stock["upside_pct"] = None
 
         stock["notes"] = (stock["notes"] + "；" if stock["notes"] else "") + (
-            "EBITDA／自由現金流採 Yahoo Finance 回傳欄位，可能為近四季資料，非保證為預估值。"
+            "EBITDA／自由現金流／營收／EBIT 採 Yahoo Finance 回傳欄位，可能為近四季或已公布資料，非保證為預估值；股利採年化或近年股利欄位。"
         )
         if shares is not None and info.get("impliedSharesOutstanding") is None:
             stock["notes"] += "股數採 sharesOutstanding 作為估值分母近似值，非明確稀釋後股數。"
