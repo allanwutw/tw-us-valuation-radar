@@ -7,7 +7,7 @@ on:
     - cron: "30 9 * * 1-5"
 
 permissions:
-  contents: read
+  contents: write
   pages: write
   id-token: write
 
@@ -39,6 +39,18 @@ jobs:
 
       - name: Validate generated data
         run: python validate_data.py
+
+      - name: Commit updated valuation data
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/latest.json
+          if ! git diff --cached --quiet; then
+            git commit -m "Update valuation data"
+            git push origin HEAD:main
+          else
+            echo "No data changes to commit"
+          fi
 
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v5
