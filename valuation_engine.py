@@ -221,7 +221,7 @@ def estimate_quality(f):
     roe = f.get("roe")
     if finite_number(roe):
         score += clamp((roe - 0.10) * 80, -10, 10)
-    fcf_margin = f.get("fcf_margin")
+    fcf_margin = f.get("fcf_margin_ttm", f.get("fcf_margin"))
     if finite_number(fcf_margin):
         score += clamp((fcf_margin - 0.08) * 50, -8, 8)
     nde = f.get("net_debt_to_ebitda")
@@ -231,23 +231,30 @@ def estimate_quality(f):
 
 
 def is_financial_sector(f):
-    """Return True for banks/insurers, not every company in Financial Services."""
+    """Identify banks and insurers from BOTH sector and industry fields.
+
+    Broad 'Financial Services' alone is not enough: payment networks, brokers,
+    exchanges and financial-data companies may be operating businesses.
+    """
     industry = str(f.get("industry") or "").lower()
     sector = str(f.get("sector") or "").lower()
-    if industry:
-        return any(k in industry for k in ("bank", "insurance", "銀行", "保險"))
-    return any(k in sector for k in ("bank", "insurance", "銀行", "保險")) or "financial" in sector
+    text = f"{sector} {industry}"
+    bank_terms = ("bank", "banks", "銀行", "金控")
+    insurance_terms = ("insurance", "insurer", "保險")
+    return any(k in text for k in bank_terms + insurance_terms)
 
 
 def sanitize_financial_inputs(f):
+    """Copy inputs and exclude industrial cash-flow metrics for banks/insurers.
+
+    No ticker-specific unit conversion is performed. Suspected per-share unit
+    problems are flagged for review instead of silently changing source data.
+    """
     f = dict(f)
-    ticker = str(f.get("ticker", "")).upper()
-    price, bvps = f.get("price"), f.get("bvps")
-    if ticker == "BRK-B" and safe_positive(price) and safe_positive(bvps) and bvps > price * 100:
-        f["bvps"] = bvps / 1500.0
     if is_financial_sector(f):
-        # Standard industrial EV/FCF methods are not suitable for banks/insurers.
-        for key in ("forward_ebitda", "forward_fcf", "revenue", "ebit", "fcf_margin"):
+        for key in ("forward_ebitda", "forward_fcf", "revenue", "ebit",
+                    "fcf_margin", "trailing_ebitda", "trailing_fcf",
+                    "trailing_revenue", "fcf_margin_ttm"):
             f[key] = None
     return f
 
@@ -291,13 +298,13 @@ def _scenario_values(f, a, scenario):
     wacc = a.get(f"wacc_{scenario}", a.get("wacc", 0.10))
     eps = f.get("forward_eps")
     bvps = f.get("bvps")
-    ebitda = f.get("forward_ebitda")
-    fcf = f.get("forward_fcf")
-    revenue = f.get("revenue")
-    ebit = f.get("ebit")
+    ebitda = f.get("trailing_ebitda", f.get("forward_ebitda"))
+    fcf = f.get("trailing_fcf", f.get("forward_fcf"))
+    revenue = f.get("trailing_revenue", f.get("revenue"))
+    ebit = f.get("trailing_ebit", f.get("ebit"))
     dividend = f.get("dividend_rate")
     net_debt, shares, market_cap = f.get("net_debt"), f.get("diluted_shares"), f.get("market_cap")
-    fcf_margin = f.get("fcf_margin")
+    fcf_margin = f.get("fcf_margin_ttm", f.get("fcf_margin"))
     v = {}
     v["DCF_Growth_Exit_5Y"] = dcf_gordon_per_share(
         fcf, growth, wacc, a.get("terminal_growth", 0.025), net_debt, shares)
@@ -307,11 +314,14 @@ def _scenario_values(f, a, scenario):
     v["DCF_EBITDA_Exit_5Y"] = dcf_ebitda_exit_per_share(
         fcf, ebitda, growth, wacc,
         a.get(f"ev_ebitda_{scenario}", a.get("ev_ebitda_base", 12.0)), net_debt, shares)
-    v["DDM_Stable"] = ddm_stable(
-        dividend, a.get("cost_of_equity", 0.10), a.get("ddm_stable_growth", 0.02))
+    coe = a.get(f"cost_of_equity_{scenario}", a.get("cost_of_equity", 0.10))
+    stable_growth = a.get(f"ddm_stable_growth_{scenario}",
+                          a.get("ddm_stable_growth", 0.02))
+    high_growth = a.get(f"ddm_high_growth_{scenario}",
+                        a.get("ddm_high_growth", 0.06))
+    v["DDM_Stable"] = ddm_stable(dividend, coe, stable_growth)
     v["DDM_Multistage"] = ddm_multistage(
-        dividend, a.get("cost_of_equity", 0.10),
-        a.get("ddm_high_growth", 0.06), a.get("ddm_stable_growth", 0.02), 5)
+        dividend, coe, high_growth, stable_growth, 5)
     v["PE"] = pe_value(eps, a.get(f"pe_{scenario}"))
     v["EV_Sales"] = ev_sales_value(
         revenue, a.get(f"ev_sales_{scenario}", a.get("ev_sales_base")), net_debt, shares)
@@ -387,8 +397,9 @@ def run_valuation(f, assumptions):
     if is_financial_sector(f):
         input_keys = ("forward_eps", "bvps")
     else:
-        input_keys = ("forward_eps", "forward_ebitda", "forward_fcf",
-                      "revenue", "ebit", "net_debt", "diluted_shares")
+        input_keys = ("forward_eps", "trailing_ebitda", "trailing_fcf",
+                      "trailing_revenue", "trailing_ebit", "net_debt",
+                      "diluted_shares")
     completeness = sum(f.get(k) is not None for k in input_keys) / len(input_keys)
     confidence = 45 + completeness * 30 + quality * 0.25
     if had_outlier:
@@ -437,7 +448,12 @@ def assumptions_for(industry):
         growth_base=0.06, growth_bear=0.02, growth_bull=0.10,
         wacc=0.10, wacc_bear=0.11, wacc_bull=0.09,
         terminal_growth=0.025,
-        cost_of_equity=0.10, ddm_stable_growth=0.02, ddm_high_growth=0.06,
+        cost_of_equity=0.10, cost_of_equity_bear=0.115,
+        cost_of_equity_base=0.10, cost_of_equity_bull=0.095,
+        ddm_stable_growth=0.02, ddm_stable_growth_bear=0.01,
+        ddm_stable_growth_base=0.02, ddm_stable_growth_bull=0.025,
+        ddm_high_growth=0.06, ddm_high_growth_bear=0.02,
+        ddm_high_growth_base=0.06, ddm_high_growth_bull=0.08,
         pe_base=18, pe_bear=14, pe_bull=22,
         pb_base=2.5, pb_bear=1.7, pb_bull=3.2,
         ev_sales_base=3.0, ev_sales_bear=2.0, ev_sales_bull=4.0,
@@ -448,7 +464,13 @@ def assumptions_for(industry):
     if any(k in i for k in ("financial", "bank", "insurance", "金融", "銀行", "保險")):
         common.update(pe_base=12, pe_bear=9, pe_bull=15,
                       pb_base=1.2, pb_bear=0.8, pb_bull=1.6,
-                      cost_of_equity=0.11, ddm_stable_growth=0.02, ddm_high_growth=0.04)
+                      cost_of_equity=0.11,
+                      cost_of_equity_bear=0.125, cost_of_equity_base=0.11,
+                      cost_of_equity_bull=0.105,
+                      ddm_stable_growth=0.02, ddm_stable_growth_bear=0.01,
+                      ddm_stable_growth_base=0.02, ddm_stable_growth_bull=0.025,
+                      ddm_high_growth=0.04, ddm_high_growth_bear=0.01,
+                      ddm_high_growth_base=0.04, ddm_high_growth_bull=0.06)
     elif any(k in i for k in ("semiconductor", "technology", "software", "半導體", "科技")):
         common.update(growth_base=0.10, growth_bear=0.04, growth_bull=0.16,
                       pe_base=24, pe_bear=18, pe_bull=30,

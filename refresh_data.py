@@ -62,9 +62,14 @@ def fetch_one(row, market):
         "sector": None,
         "industry": None,
         "forward_eps": None,
-        "forward_ebitda": None,
-        "forward_fcf": None,
-        "revenue": None,
+        "forward_ebitda": None,  # legacy compatibility alias; not a forward estimate
+        "forward_fcf": None,     # legacy compatibility alias; not a forward estimate
+        "revenue": None,         # legacy compatibility alias
+        "trailing_ebitda": None,
+        "trailing_fcf": None,
+        "trailing_revenue": None,
+        "trailing_ebit": None,
+        "fcf_margin_ttm": None,
         "ebit": None,
         "dividend_rate": None,
         "bvps": None,
@@ -120,9 +125,13 @@ def fetch_one(row, market):
         # Yahoo's generic EBITDA and freeCashflow fields are trailing/current
         # reported values, not necessarily analyst forward estimates. Keep the
         # legacy field names for compatibility, but disclose the data definition.
-        stock["forward_ebitda"] = number_or_none(info.get("ebitda"))
-        stock["forward_fcf"] = number_or_none(info.get("freeCashflow"))
-        stock["revenue"] = number_or_none(info.get("totalRevenue"))
+        stock["trailing_ebitda"] = number_or_none(info.get("ebitda"))
+        stock["trailing_fcf"] = number_or_none(info.get("freeCashflow"))
+        stock["trailing_revenue"] = number_or_none(info.get("totalRevenue"))
+        # Backward-compatible aliases; the engine now prefers explicit TTM names.
+        stock["forward_ebitda"] = stock["trailing_ebitda"]
+        stock["forward_fcf"] = stock["trailing_fcf"]
+        stock["revenue"] = stock["trailing_revenue"]
         # Yahoo Finance's EBIT may be absent; operatingIncome is used as a
         # clearly disclosed proxy when available.
         ebit_raw = info.get("ebit")
@@ -130,7 +139,8 @@ def fetch_one(row, market):
             ebit_raw = info.get("operatingIncome")
             if ebit_raw is not None:
                 stock["notes"] = (stock["notes"] + "；" if stock["notes"] else "") + "EBIT 採 operatingIncome 作為近似值。"
-        stock["ebit"] = number_or_none(ebit_raw)
+        stock["trailing_ebit"] = number_or_none(ebit_raw)
+        stock["ebit"] = stock["trailing_ebit"]
         dividend_raw = info.get("dividendRate")
         if dividend_raw is None:
             dividend_raw = info.get("trailingAnnualDividendRate")
@@ -148,10 +158,11 @@ def fetch_one(row, market):
         elif debt is not None and cash_raw is None:
             stock["notes"] = (stock["notes"] + "；" if stock["notes"] else "") + "現金資料缺失，未計算淨負債"
 
-        revenue = stock["revenue"]
-        if stock["forward_fcf"] is not None and revenue is not None and revenue > 0:
-            stock["fcf_margin"] = stock["forward_fcf"] / revenue
-        ebitda = stock["forward_ebitda"]
+        revenue = stock["trailing_revenue"]
+        if stock["trailing_fcf"] is not None and revenue is not None and revenue > 0:
+            stock["fcf_margin_ttm"] = stock["trailing_fcf"] / revenue
+            stock["fcf_margin"] = stock["fcf_margin_ttm"]
+        ebitda = stock["trailing_ebitda"]
         if ebitda is not None and ebitda != 0 and stock["net_debt"] is not None:
             stock["net_debt_to_ebitda"] = stock["net_debt"] / ebitda
 
@@ -172,10 +183,17 @@ def fetch_one(row, market):
             stock["upside_pct"] = None
 
         stock["notes"] = (stock["notes"] + "；" if stock["notes"] else "") + (
-            "EBITDA／自由現金流／營收／EBIT 採 Yahoo Finance 回傳欄位，可能為近四季或已公布資料，非保證為預估值；股利採年化或近年股利欄位。"
+            "EBITDA／自由現金流／營收／EBIT 採 Yahoo Finance trailing/current 欄位，非分析師 Forward 預估；DCF 僅將其作為最近可得基期，結果須視為粗略情境估值；股利採年化或近年股利欄位。"
         )
         if shares is not None and info.get("impliedSharesOutstanding") is None:
             stock["notes"] += "股數採 sharesOutstanding 作為估值分母近似值，非明確稀釋後股數。"
+        stock["data_period"] = {
+            "trailing_ebitda": "Yahoo Finance info.ebitda (trailing/current; not guaranteed forward)",
+            "trailing_fcf": "Yahoo Finance info.freeCashflow (trailing/current; not guaranteed forward)",
+            "trailing_revenue": "Yahoo Finance info.totalRevenue (trailing/current)",
+            "trailing_ebit": "Yahoo Finance info.ebit or operatingIncome proxy",
+            "forward_eps": "Yahoo Finance info.forwardEps",
+        }
     except Exception as exc:
         stock["valuation_status"] = "資料取得失敗，暫不提供合理價"
         stock["notes"] = (stock["notes"] + "；" if stock["notes"] else "") + "資料取得失敗：" + str(exc)[:180]
@@ -198,7 +216,7 @@ def main():
         "updated_at": datetime.now(timezone.utc).isoformat(),
         "warning": (
             "股票池為候選觀察清單，非每日即時市值排名；行情可能延遲或缺漏。"
-            "估值為模型推算，財務欄位可能含近四季資料，需自行核對，不構成投資建議。"
+            "估值為模型推算；trailing_* 為近四季/目前回報值，非 Forward 預估。legacy forward_ebitda/forward_fcf 欄位僅為相容別名，請勿解讀為預估值；需自行核對，不構成投資建議。"
         ),
         "markets": markets,
     }
